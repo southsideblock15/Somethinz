@@ -49,9 +49,45 @@ app.get('/receive.php', async (req, res) => {
     try {
         const fileContent = fs.readFileSync(MESSAGE_FILE, 'utf8');
         if (!fileContent) {
-            return res.json("?");
-        } else {
-            return res.type("application/json").send(fileContent);
+            return res.json([]);
+        }
+
+        // Try to parse JSON and remove any occurrences of the breach message
+        try {
+            const parsed = JSON.parse(fileContent);
+
+            const sanitize = (value) => {
+                if (typeof value === 'string') {
+                    return value === BREACH_MESSAGE ? null : value;
+                }
+                if (Array.isArray(value)) {
+                    return value
+                        .map(sanitize)
+                        .filter((v) => v !== null && v !== undefined);
+                }
+                if (value && typeof value === 'object') {
+                    const out = {};
+                    Object.keys(value).forEach((k) => {
+                        const v = sanitize(value[k]);
+                        if (v !== null && v !== undefined) out[k] = v;
+                    });
+                    return out;
+                }
+                return value;
+            };
+
+            const safe = sanitize(parsed);
+            return res.type('application/json').send(JSON.stringify(safe));
+        } catch (e) {
+            // Not JSON — treat as text. If it exactly matches the breach message, don't return it.
+            const text = fileContent.toString();
+            if (text.trim() === BREACH_MESSAGE) {
+                return res.json([]);
+            }
+
+            // Otherwise, remove any plain occurrences of the breach message
+            const cleaned = text.split(BREACH_MESSAGE).join('');
+            return res.type('application/json').send(cleaned);
         }
     } catch (err) {
         res.json([]);
