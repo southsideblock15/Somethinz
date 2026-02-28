@@ -11,9 +11,9 @@ const BODY_FILE = './body.txt';
 const port = process.env.PORT || 3000;
 
 // Middleware to parse request bodies
-app.use(express.json());
-app.use(express.text());
-app.use(express.raw({ type: '*/*' }));
+app.use(express.json()); // For parsing application/json
+app.use(express.text()); // For parsing plain text bodies
+app.use(express.raw({ type: '*/*' })); // To handle raw data, this could be used for binary inputs
 
 // Default route
 app.get('/', (req, res) => {
@@ -24,7 +24,6 @@ app.get('/', (req, res) => {
 
 // POST endpoint to write body to a file and execute a script if present
 app.post('/body', (req, res) => {
-    // Log incoming request body for debugging
     console.log("Received POST request:", req.body);
 
     // Reject body if it contains the breach message
