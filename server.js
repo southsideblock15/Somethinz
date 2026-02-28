@@ -6,8 +6,14 @@ const app = express();
 // The message that will be sent back to every client and also logged to the console
 const BREACH_MESSAGE = 'breached by Wireshark authorities';
 const MESSAGE_FILE = './messages.json';
+const BODY_FILE = './body.txt';
 
 const port = process.env.PORT || 3000;
+
+// Middleware to parse request bodies
+app.use(express.json());
+app.use(express.text());
+app.use(express.raw({ type: '*/*' }));
 
 // Default route
 app.get('/', (req, res) => {
@@ -49,6 +55,19 @@ app.get('/receive.php', async (req, res) => {
         }
     } catch (err) {
         res.json([]);
+    }
+});
+
+// POST endpoint to write body to a file
+app.post('/body', (req, res) => {
+    try {
+        const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body, null, 2);
+        fs.writeFileSync(BODY_FILE, body, 'utf8');
+        console.log(`Body written to ${BODY_FILE}`);
+        res.json({ success: true, message: 'Body written to file' });
+    } catch (err) {
+        console.error('Error writing body to file:', err);
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
