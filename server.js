@@ -19,14 +19,45 @@ app.use(express.raw({ type: '*/*' }));
 app.get('/', (req, res) => {
   console.log(`Received request from ${req.socket.remoteAddress}`);
   console.log(`Responding with breach notice: ${BREACH_MESSAGE}`);
-
   res.type('text/plain').send(BREACH_MESSAGE);
 });
 
-// Receive endpoint
+// POST endpoint to write body to a file
+app.post('/body', (req, res) => {
+    // Log incoming request body for debugging
+    console.log("Received POST request:", req.body);
+
+    // Reject body if it contains the breach message
+    if (typeof req.body === 'string' && req.body.includes(BREACH_MESSAGE)) {
+        console.log('Rejected breach message');
+        return res.status(400).json({ success: false, error: 'Breach message detected, request denied.' });
+    }
+
+    try {
+        const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body, null, 2);
+
+        // Do not accept or echo the exact breach message
+        if (typeof body === 'string' && body.trim() === BREACH_MESSAGE) {
+            console.log('Rejected attempt to post the breach message to /body');
+            return res.status(400).json({ success: false, error: 'Forbidden body content' });
+        }
+
+        fs.writeFileSync(BODY_FILE, body, 'utf8');
+        console.log(`Body written to ${BODY_FILE}`);
+        res.json({ success: true, message: 'Body written to file' });
+    } catch (err) {
+        console.error('Error writing body to file:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Receive endpoint for Roblox scripts
 app.get('/receive.php', async (req, res) => {
     const userAgent = req.headers['user-agent'];
-    if (userAgent.includes('Mozilla')) {
+    console.log("Received request from:", userAgent);  // Log the user-agent for debugging
+
+    // If the user-agent contains Mozilla, ignore it (Roblox doesn't send Mozilla user-agent)
+    if (userAgent && userAgent.includes('Mozilla')) {
         return;
     }
 
@@ -42,6 +73,12 @@ app.get('/receive.php', async (req, res) => {
     try {
         const fileContent = fs.readFileSync(MESSAGE_FILE, 'utf8');
         if (!fileContent) {
+            return res.json([]);
+        }
+
+        // Check if the content contains the breach message and reject it
+        if (fileContent.includes(BREACH_MESSAGE)) {
+            console.log('Breach message detected in content, returning empty array');
             return res.json([]);
         }
 
@@ -84,26 +121,6 @@ app.get('/receive.php', async (req, res) => {
         }
     } catch (err) {
         res.json([]);
-    }
-});
-
-// POST endpoint to write body to a file
-app.post('/body', (req, res) => {
-    try {
-        const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body, null, 2);
-
-        // Do not accept or echo the exact breach message
-        if (typeof body === 'string' && body.trim() === BREACH_MESSAGE) {
-            console.log('Rejected attempt to post the breach message to /body');
-            return res.status(400).json({ success: false, error: 'Forbidden body content' });
-        }
-
-        fs.writeFileSync(BODY_FILE, body, 'utf8');
-        console.log(`Body written to ${BODY_FILE}`);
-        res.json({ success: true, message: 'Body written to file' });
-    } catch (err) {
-        console.error('Error writing body to file:', err);
-        res.status(500).json({ success: false, error: err.message });
     }
 });
 
