@@ -33,13 +33,6 @@ app.get('/receive.php', async (req, res) => {
     const id = req.headers['roblox-id'];
     if (!id) { return }
 
-    const customHeaderKey = '[?!]';
-    const customHeader = req.headers[customHeaderKey];
-
-    if (!customHeader || customHeader !== '[?!]') {
-        return;
-    }
-
     res.type('application/json');
 
     if (!fs.existsSync(MESSAGE_FILE)) {
