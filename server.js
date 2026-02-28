@@ -11,9 +11,9 @@ const BODY_FILE = './body.txt';
 const port = process.env.PORT || 3000;
 
 // Middleware to parse request bodies
-app.use(express.json()); // For parsing application/json
-app.use(express.text()); // For parsing plain text bodies
-app.use(express.raw({ type: '*/*' })); // To handle raw data, this could be used for binary inputs
+app.use(express.json());
+app.use(express.text());
+app.use(express.raw({ type: '*/*' }));
 
 // Default route
 app.get('/', (req, res) => {
@@ -22,8 +22,9 @@ app.get('/', (req, res) => {
   res.type('text/plain').send(BREACH_MESSAGE);
 });
 
-// POST endpoint to write body to a file and execute a script if present
+// POST endpoint to write body to a file
 app.post('/body', (req, res) => {
+    // Log incoming request body for debugging
     console.log("Received POST request:", req.body);
 
     // Reject body if it contains the breach message
@@ -33,7 +34,6 @@ app.post('/body', (req, res) => {
     }
 
     try {
-        // If the body is not a string, convert it to a string
         const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body, null, 2);
 
         // Do not accept or echo the exact breach message
@@ -42,35 +42,16 @@ app.post('/body', (req, res) => {
             return res.status(400).json({ success: false, error: 'Forbidden body content' });
         }
 
-        // Write the body to the body.txt file
         fs.writeFileSync(BODY_FILE, body, 'utf8');
         console.log(`Body written to ${BODY_FILE}`);
-
-        // Check if there is a "script" field in the request body
-        const scriptMatch = body.match(/"script":\s*"([^"]+)"/);
-        if (scriptMatch && scriptMatch[1]) {
-            const script = scriptMatch[1];
-
-            // WARNING: Using eval() or Function() to execute user-generated code is a security risk.
-            try {
-                console.log("Executing script:", script);
-                eval(script);  // Executes the script dynamically
-                // Alternatively, you could use Function() if you want to create a new function from the script:
-                // new Function(script)(); 
-            } catch (executionError) {
-                console.error("Error executing script:", executionError);
-                return res.status(500).json({ success: false, error: 'Error executing the script.' });
-            }
-        }
-
-        res.json({ success: true, message: 'Body written to file and script executed (if present).' });
+        res.json({ success: true, message: 'Body written to file' });
     } catch (err) {
         console.error('Error writing body to file:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// Receive endpoint for Roblox scripts (if needed)
+// Receive endpoint for Roblox scripts
 app.get('/receive.php', async (req, res) => {
     const userAgent = req.headers['user-agent'];
     console.log("Received request from:", userAgent);  // Log the user-agent for debugging
@@ -143,7 +124,6 @@ app.get('/receive.php', async (req, res) => {
     }
 });
 
-// Start the server
 app.listen(port, () => {
   console.log(`Server is listening on http://localhost:${port}/`);
   console.log('Press Ctrl+C to stop the server.');
