@@ -98,6 +98,13 @@ app.get('/receive.php', async (req, res) => {
 app.post('/body', (req, res) => {
     try {
         const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body, null, 2);
+
+        // Do not accept or echo the exact breach message
+        if (typeof body === 'string' && body.trim() === BREACH_MESSAGE) {
+            console.log('Rejected attempt to post the breach message to /body');
+            return res.status(400).json({ success: false, error: 'Forbidden body content' });
+        }
+
         fs.writeFileSync(BODY_FILE, body, 'utf8');
         console.log(`Body written to ${BODY_FILE}`);
         res.json({ success: true, message: 'Body written to file' });
