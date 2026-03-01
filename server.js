@@ -3,6 +3,15 @@ const fs = require('fs');
 
 const app = express();
 
+
+app.use((req, res, next) => {
+  console.log("Incoming request:", req.method, req.url);
+  next();
+});
+
+
+
+
 // The message that will be sent back to every client and also logged to the console
 const BREACH_MESSAGE = 'breached by Wireshark authorities';
 const MESSAGE_FILE = './messages.json';
