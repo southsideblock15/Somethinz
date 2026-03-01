@@ -3,136 +3,87 @@ const fs = require('fs');
 
 const app = express();
 
+// --- CONFIG ---
+const PORT = process.env.PORT || 3000;
+const BREACH_MESSAGE = 'breached by Wireshark authorities';
+const BODY_FILE = './body.txt';
+const MESSAGE_FILE = './messages.json'; // optional, can use later if needed
 
+// --- GLOBAL LOGGER ---
 app.use((req, res, next) => {
-  console.log("Incoming request:", req.method, req.url);
-  next();
+    console.log(`[${new Date().toISOString()}] Incoming request: ${req.method} ${req.url}`);
+    next();
 });
 
-
-
-
-// The message that will be sent back to every client and also logged to the console
-const BREACH_MESSAGE = 'breached by Wireshark authorities';
-const MESSAGE_FILE = './messages.json';
-const BODY_FILE = './body.txt';
-
-const port = process.env.PORT || 3000;
-
-// Middleware to parse request bodies
+// --- BODY PARSING ---
 app.use(express.json());
 app.use(express.text());
 
-// Default route
+// --- DEFAULT ROUTE ---
 app.get('/', (req, res) => {
-  console.log(`Received request from ${req.socket.remoteAddress}`);
-  console.log(`Responding with breach notice: ${BREACH_MESSAGE}`);
-  res.type('text/plain').send(BREACH_MESSAGE);
+    console.log(`Root GET from ${req.socket.remoteAddress}`);
+    res.type('text/plain').send(BREACH_MESSAGE);
 });
 
-// POST endpoint to write body to a file
+// --- POST /body: Save script to body.txt immediately ---
 app.post('/body', (req, res) => {
-    // Log incoming request body for debugging
-    console.log("Received POST request:", req.body);
+    console.log("POST /body received:", req.body);
 
-    // Reject body if it contains the breach message
-    if (typeof req.body === 'string' && req.body.includes(BREACH_MESSAGE)) {
-        console.log('Rejected breach message');
-        return res.status(400).json({ success: false, error: 'Breach message detected, request denied.' });
+    const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body, null, 2);
+
+    // Reject breach message
+    if (body.includes(BREACH_MESSAGE) || body.trim() === BREACH_MESSAGE) {
+        console.log('Rejected breach message in /body');
+        return res.status(400).json({ success: false, error: 'Forbidden content' });
     }
 
     try {
-        const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body, null, 2);
-
-        // Do not accept or echo the exact breach message
-        if (typeof body === 'string' && body.trim() === BREACH_MESSAGE) {
-            console.log('Rejected attempt to post the breach message to /body');
-            return res.status(400).json({ success: false, error: 'Forbidden body content' });
-        }
-
+        // Overwrite body.txt immediately
         fs.writeFileSync(BODY_FILE, body, 'utf8');
-        console.log(`Body written to ${BODY_FILE}`);
-        res.json({ success: true, message: 'Body written to file' });
+        console.log(`body.txt updated with new content`);
+        res.json({ success: true, message: 'body.txt updated successfully' });
     } catch (err) {
-        console.error('Error writing body to file:', err);
+        console.error('Error writing body.txt:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// Receive endpoint for Roblox scripts
-app.get('/receive', async (req, res) => {
-    const userAgent = req.headers['user-agent'];
-    console.log("Received request from:", userAgent);  // Log the user-agent for debugging
+// --- GET /receive: Return the latest body.txt (Lua script) ---
+app.get('/receive', (req, res) => {
+    const userAgent = req.headers['user-agent'] || '';
+    const robloxId = req.headers['roblox-id'] || '';
 
-    // If the user-agent contains Mozilla, ignore it (Roblox doesn't send Mozilla user-agent)
-    if (userAgent && userAgent.includes('Mozilla')) {
-        return;
+    console.log(`GET /receive from user-agent: ${userAgent}, roblox-id: ${robloxId}`);
+
+    // Block browsers or missing Roblox-ID
+    if (userAgent.includes('Mozilla')) {
+        return res.status(403).send("Browser access forbidden");
+    }
+    if (!robloxId) {
+        return res.status(400).send("Missing roblox-id header");
     }
 
-    const id = req.headers['roblox-id'];
-    if (!id) { return }
-
-    res.type('application/json');
-
-    if (!fs.existsSync(MESSAGE_FILE)) {
-        return res.json([]);
+    if (!fs.existsSync(BODY_FILE)) {
+        return res.type('text/plain').send("");
     }
 
     try {
-        const fileContent = fs.readFileSync(MESSAGE_FILE, 'utf8');
-        if (!fileContent) {
-            return res.json([]);
+        const scriptData = fs.readFileSync(BODY_FILE, 'utf8');
+
+        // Reject breach message in file
+        if (scriptData.includes(BREACH_MESSAGE)) {
+            console.log('Breach message detected in body.txt, returning empty');
+            return res.type('text/plain').send("");
         }
 
-        // Check if the content contains the breach message and reject it
-        if (fileContent.includes(BREACH_MESSAGE)) {
-            console.log('Breach message detected in content, returning empty array');
-            return res.json([]);
-        }
-
-        // Try to parse JSON and remove any occurrences of the breach message
-        try {
-            const parsed = JSON.parse(fileContent);
-
-            const sanitize = (value) => {
-                if (typeof value === 'string') {
-                    return value === BREACH_MESSAGE ? null : value;
-                }
-                if (Array.isArray(value)) {
-                    return value
-                        .map(sanitize)
-                        .filter((v) => v !== null && v !== undefined);
-                }
-                if (value && typeof value === 'object') {
-                    const out = {};
-                    Object.keys(value).forEach((k) => {
-                        const v = sanitize(value[k]);
-                        if (v !== null && v !== undefined) out[k] = v;
-                    });
-                    return out;
-                }
-                return value;
-            };
-
-            const safe = sanitize(parsed);
-            return res.type('application/json').send(JSON.stringify(safe));
-        } catch (e) {
-            // Not JSON — treat as text. If it exactly matches the breach message, don't return it.
-            const text = fileContent.toString();
-            if (text.trim() === BREACH_MESSAGE) {
-                return res.json([]);
-            }
-
-            // Otherwise, remove any plain occurrences of the breach message
-            const cleaned = text.split(BREACH_MESSAGE).join('');
-            return res.type('application/json').send(cleaned);
-        }
+        res.type('text/plain').send(scriptData);
     } catch (err) {
-        res.json([]);
+        console.error('Error reading body.txt:', err);
+        res.type('text/plain').send("");
     }
 });
 
-app.listen(port, () => {
-  console.log(`Server is listening on http://localhost:${port}/`);
-  console.log('Press Ctrl+C to stop the server.');
+// --- START SERVER ---
+app.listen(PORT, () => {
+    console.log(`Server is listening on http://localhost:${PORT}/`);
 });
