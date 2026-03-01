@@ -52,7 +52,7 @@ app.post('/body', (req, res) => {
 });
 
 // Receive endpoint for Roblox scripts
-app.get('/receive.php', async (req, res) => {
+app.get('/receive', async (req, res) => {
     const userAgent = req.headers['user-agent'];
     console.log("Received request from:", userAgent);  // Log the user-agent for debugging
 
