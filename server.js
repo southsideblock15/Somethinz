@@ -1,13 +1,14 @@
 const express = require('express');
 const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const BODY_FILE = './body.txt';
+const BODY_FILE = path.join(__dirname, 'body.txt');
 
 app.use(express.json());
 
-// Log requests
+// Log all requests
 app.use((req, res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
     next();
@@ -18,7 +19,7 @@ app.post('/body', (req, res) => {
     const body = JSON.stringify(req.body, null, 2);
     try {
         fs.writeFileSync(BODY_FILE, body, 'utf8');
-        console.log('body.txt updated with new command');
+        console.log('body.txt updated with new command:', body);
         res.json({ success: true });
     } catch (err) {
         console.error('Error writing body.txt:', err);
@@ -28,9 +29,16 @@ app.post('/body', (req, res) => {
 
 // GET /receive → return latest command
 app.get('/receive', (req, res) => {
-    if (!fs.existsSync(BODY_FILE)) return res.type('text/plain').send('');
+    if (!fs.existsSync(BODY_FILE)) return res.json({});
+
     const content = fs.readFileSync(BODY_FILE, 'utf8');
-    res.type('text/plain').send(content);
+    try {
+        const json = JSON.parse(content);
+        res.json(json);  // send proper JSON to Roblox
+    } catch (err) {
+        console.error('Invalid JSON in body.txt:', err);
+        res.json({});
+    }
 });
 
 app.listen(PORT, () => {
