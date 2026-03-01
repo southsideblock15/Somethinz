@@ -13,7 +13,6 @@ const port = process.env.PORT || 3000;
 // Middleware to parse request bodies
 app.use(express.json());
 app.use(express.text());
-app.use(express.raw({ type: '*/*' }));
 
 // Default route
 app.get('/', (req, res) => {
